@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#f5f6f3">
     <meta name="description" content="Add TSP Logistics deliveries and keep shipment details together.">
+    <meta name="api-base-url" content="https://tspapi.vercel.app">
     <title>Deliveries | TSP Logistics</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -50,7 +51,7 @@
                     </svg>
                 </span>
                 <strong>Your rates, your records</strong>
-                <p>Shipment details are only used to find the matching rate.</p>
+                <p>Delivery records and matched rates are saved in the connected TiDB database.</p>
             </div>
             <div class="sidebar-footer">
                 <span class="avatar">T</span>
@@ -65,7 +66,7 @@
                 <div class="topbar-right">
                     <span class="today-label" id="today-label"></span>
                     <span class="topbar-divider"></span>
-                    <span class="connection-pill"><span class="status-dot"></span>TiDB not connected</span>
+                    <span class="connection-pill" id="connection-pill"><span class="status-dot"></span><span id="connection-label">Checking TiDB...</span></span>
                 </div>
             </header>
 
@@ -96,10 +97,10 @@
                         </svg>
                     </span>
                     <div class="banner-copy">
-                        <strong>TiDB rate database is not connected yet</strong>
-                        <span>Deliveries can be added here. Connect TiDB to show a rate for each delivery.</span>
+                        <strong id="connection-title">Checking database connection</strong>
+                        <span id="connection-description">Connecting to the delivery and rate service.</span>
                     </div>
-                    <span class="banner-status"><span class="status-dot"></span>Offline</span>
+                    <span class="banner-status" id="banner-status"><span class="status-dot"></span><span id="banner-status-label">Checking</span></span>
                 </section>
 
                 <div class="workspace-grid">
@@ -114,7 +115,7 @@
                             </div>
                             <div>
                                 <h2 id="form-title">Add a delivery</h2>
-                                <p>Enter the shipment details to add it to your delivery list.</p>
+                                <p>Select a location and truck length; the matching rate is calculated automatically.</p>
                             </div>
                         </div>
 
@@ -149,7 +150,12 @@
                                             <rect x="2.5" y="5" width="15" height="10" rx="2" stroke="currentColor" stroke-width="1.5"/>
                                             <path d="M5.5 8h9M5.5 11h2M9 11h2M12.5 11h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                                         </svg>
-                                        <input id="truck-plate" name="truckPlate" type="text" placeholder="e.g. ABC 1234" autocomplete="off" required>
+                                        <select id="truck-plate" name="truckPlate" required>
+                                            <option value="">Select a truck plate</option>
+                                            <option value="CCR 2867">CCR 2867</option>
+                                            <option value="CCR 2869">CCR 2869</option>
+                                            <option value="CBF 3034">CBF 3034</option>
+                                        </select>
                                     </span>
                                 </label>
 
@@ -165,17 +171,36 @@
                                 </label>
 
                                 <label class="field field-full">
-                                    <span class="field-label">Destination <span class="required">*</span></span>
+                                    <span class="field-label">Delivery location <span class="required">*</span></span>
                                     <span class="input-wrap">
                                         <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
                                             <path d="M16 8.3c0 4.4-6 9-6 9s-6-4.6-6-9a6 6 0 1 1 12 0Z" stroke="currentColor" stroke-width="1.5"/>
                                             <circle cx="10" cy="8.2" r="2" stroke="currentColor" stroke-width="1.5"/>
                                         </svg>
-                                        <input id="destination" name="destination" type="text" placeholder="City, province, or delivery location" autocomplete="street-address" required>
+                                        <select id="destination-select" name="destinationId" required disabled>
+                                            <option value="">Loading delivery locations...</option>
+                                        </select>
                                     </span>
                                 </label>
+                                <label class="field">
+                                    <span class="field-label">Truck length <span class="required">*</span></span>
+                                    <span class="input-wrap">
+                                        <select id="post-length" name="postLength" required>
+                                            <option value="">Select truck length</option>
+                                            <option value="40">40 ft</option>
+                                            <option value="45">45 ft</option>
+                                            <option value="50">50 ft</option>
+                                            <option value="55">55 ft</option>
+                                            <option value="60">60 ft</option>
+                                        </select>
+                                    </span>
+                                </label>
+                                <div class="field field-full rate-preview" id="rate-preview" aria-live="polite">
+                                    Select a location and truck length to see the rate.
+                                </div>
                             </div>
 
+                            <p class="form-message" id="form-message" role="alert" hidden></p>
                             <div class="form-footer">
                                 <p><span class="required">*</span> Required fields</p>
                                 <button class="submit-button" type="submit">
@@ -200,12 +225,16 @@
                                     </svg>
                                 </div>
                                 <div>
-                                    <h2 id="deliveries-title">Added deliveries</h2>
-                                    <p>Shipment details for deliveries in this session.</p>
+                                    <h2 id="deliveries-title">Active deliveries</h2>
+                                    <p>Delivery records saved in TiDB. Archived records remain in exports.</p>
                                 </div>
                             </div>
-                            <span class="delivery-count" id="delivery-count">0 deliveries</span>
+                            <div class="delivery-actions">
+                                <button class="export-button" id="export-deliveries" type="button">Export .xlsx</button>
+                                <span class="delivery-count" id="delivery-count">0 deliveries</span>
+                            </div>
                         </div>
+                        <p class="form-message delivery-message" id="delivery-message" role="alert" hidden></p>
                         <div class="delivery-list" id="delivery-list" aria-live="polite" aria-relevant="additions">
                             <div class="empty-state" id="empty-state">
                                 <span class="empty-state-icon" aria-hidden="true">

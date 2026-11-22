@@ -1,0 +1,16 @@
+{
+  "name": "tsp-logistics",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TSP Logistics delivery management app with TiDB-backed Vercel API routes",
+  "scripts": {
+    "dev": "npx vercel dev"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "mysql2": "^3.14.0"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  }
+}
